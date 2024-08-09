@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Routing within Panimalar College</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .controls {
+            padding: 10px;
+            background-color: #f7f7f7;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+        .controls input, .controls button {
+            padding: 10px;
+            font-size: 16px;
+        }
+        .controls input {
+            width: 200px;
+        }
+        .controls button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        #map {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+    <div class="controls">
+        <form id="routeForm">
+            <input type="text" name="startBlock" placeholder="Start Block" />
+            <input type="text" name="endBlock" placeholder="End Block" />
+            <input type="hidden" name="userLocation" id="userLocation" />
+            <button type="submit">Find Route</button>
+        </form>
+    </div>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([13.05083, 80.07679], 15); // Initialize map with default center
+        var userMarker = L.marker([13.05083, 80.07679]).addTo(map);
+        var routeLayer = L.layerGroup().addTo(map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18
+        }).addTo(map);
+
+        var updateInterval = 5000;  // Interval to update location (in milliseconds)
+        var lastLocationUpdate = 0;
+
+        $(document).ready(function() {
+            $('#routeForm').on('submit', function(event) {
+                event.preventDefault();
+                var startBlock = $('input[name="startBlock"]').val().trim().toLowerCase();
+
+                if (startBlock === 'my location') {
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(function(position) {
+                            updateMap(position.coords.latitude, position.coords.longitude);
+                            $('#userLocation').val(position.coords.latitude + ',' + position.coords.longitude);
+                            submitForm();
+                            startLocationUpdates();
+                        }, function(error) {
+                            alert("Error obtaining current location: " + error.message);
+                        });
+                    } else {
+                        alert("Geolocation is not supported by this browser.");
+                    }
+                } else {
+                    submitForm();
+                }
+            });
+
+            function submitForm() {
+                $.ajax({
+                    type: 'POST',
+                    url: '/route',
+                    data: $('#routeForm').serialize(),
+                    success: function(response) {
+                        if (response.error) {
+                            alert(response.error);
+                        } else {
+                            $('#map').html(response.map);
+                        }
+                    },
+                    error: function(error) {
+                        alert("An error occurred: " + error.responseText);
+                    }
+                });
+            }
+
+            function startLocationUpdates() {
+                if (navigator.geolocation) {
+                    setInterval(function() {
+                        navigator.geolocation.getCurrentPosition(function(position) {
+                            var now = Date.now();
+                            if (now - lastLocationUpdate >= updateInterval) {
+                                lastLocationUpdate = now;
+                                updateMap(position.coords.latitude, position.coords.longitude);
+                                $('#userLocation').val(position.coords.latitude + ',' + position.coords.longitude);
+                                submitForm();
+                            }
+                        }, function(error) {
+                            alert("Error obtaining current location: " + error.message);
+                        });
+                    }, updateInterval);
+                }
+            }
+
+            function updateMap(lat, lng) {
+                console.log('Updating location to:', lat, lng); // Log coordinates
+                userMarker.setLatLng([lat, lng]);
+                map.setView([lat, lng], map.getZoom());
+            }
+        });
+    </script>
+</body>
+</html>
